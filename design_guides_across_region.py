@@ -8,11 +8,13 @@ requires bedtools. optionally: local blast installation
 Matt Rich, 2023
 """
 
-import subprocess, re 
+import subprocess, re, sys
 
 def get_regions_by_gene(gene, extra):
 	#call grep to get regions
-	grep_call =	"grep WormBase {} | grep CDS | grep {}".format(args.GFF, gene)
+	#this is a bit hacky -- it will only work when gene names are at the end of the line
+	#this is true for wormbase gff3's though. 
+	grep_call =	"grep WormBase {} | grep CDS | grep {}$".format(args.GFF, gene)
 	grep_output = subprocess.run(grep_call, shell=True, capture_output=True, text=True)
 	regions = [x.split("\t") for x in grep_output.stdout.split("\n")][0:-1]
 	
@@ -149,6 +151,10 @@ def reverse_complement(seq):
 	}
 	return "".join([dna_dict[x.upper()] for x in seq[::-1]])
 
+#a little error for BLASTdbs not being real
+class BLASTdbError(Exception):
+	pass
+
 if __name__ == "__main__":
 	
 	from argparse import ArgumentParser
@@ -160,12 +166,6 @@ if __name__ == "__main__":
 		help = "input. Can be sequence, gene name, or region (e.g., I:123-456)")
 	parser.add_argument("--input-type", action = 'store', type = str, dest = "INPUTTYPE", 
 		help = "input type. must be 'seq', 'region', or 'gene")
-#	parser.add_argument('-s', '--seq', action = 'store', type = str, dest = "SEQ", 
-#		help = "sequence to search", default=None)
-#	parser.add_argument('-r', '--region', action = 'append', type = str, dest = "REGION", 
-#		help = "genomic region to search in chr:start-stop format.", default=None)
-#	parser.add_argument('-g', "--gene",  action = 'store', type = str, dest = 'GENE', 
-#		help = "gene to design guides against", default=None)
 	parser.add_argument('--gff', action = 'store', type = str, dest = 'GFF',
 		help = "GFF3 file containing exons and gene names as locus field")
 	parser.add_argument('-f', '--fasta', action = 'store', type = str, dest = "FASTA", 
@@ -203,7 +203,18 @@ if __name__ == "__main__":
 	else:
 		input_type = determine_input_type(args.INPUT)
 
-	print("input type detected as {}".format(input_type))
+	print("input type detected as {}".format(input_type), file=sys.stderr)
+	
+	if args.USE_BLAST:
+		#check if BLAST db exists, because otherwise this'll just run and not
+		#check anything....
+		check_blast_call = "blastdbcmd -db {} -info".format(args.BLASTDB)
+		check_blast = subprocess.run(check_blast_call, shell=True, text=True,
+						capture_output=True)
+		if check_blast.stdout.startswith("Database:"):
+			print("BLAST db found. ({})".format(args.BLASTDB), file=sys.stderr)
+		else:
+			raise BLASTdbError("BLAST database not found! Either run without --blast or confirm location.")
 
 	reg = []
 	if input_type == "gene":
@@ -221,7 +232,7 @@ if __name__ == "__main__":
 	
 	
 	#print header
-	print("\t".join(["chrom", "start", "stop", "seq", "seq2", "filter", "notes"]))
+	print("\t".join(["chrom", "start", "stop", "spacer", "fullseq", "filter", "notes"]))
 
 	for r in region_seqs:
 		potential_targets = []
