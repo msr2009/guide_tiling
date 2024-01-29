@@ -99,7 +99,7 @@ def blast_guide(seqname, seq, db, e_value, pam, min_length, fasta):
 				else:
 					pam_check = check_pam(l[1], int(l[9])-4, int(l[8]), "-")
 				if pam_check:
-					ontargets.append("{}:{}-{}".format([1], l[8], l[9]))
+					ontargets.append("{}:{}-{}".format(l[1], l[8], l[9]))
 #	subprocess.run("rm tmp.fasta")
 	return ontargets
 
